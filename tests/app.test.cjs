@@ -118,7 +118,6 @@ test('main entry point references existing local scripts, styles and images', ()
     ([, id, label]) => [id, label]);
   assert.deepEqual(options, FOCUS_PROFILES.map(({ id, focusMinutes, breakMinutes }) =>
     [id, `${focusMinutes} + ${breakMinutes}`]));
-  assert.ok(!options.some(([id]) => id === '1-1'));
   const ids = Array.from(html.matchAll(/\bid="([^"]+)"/g), match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
   for (const [, reference] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
@@ -145,6 +144,28 @@ test('Play requires a goal and starts the selected 40 + 11 profile', () => {
   assert.equal(ui.get('timer-actions').hidden, true);
   assert.equal(ui.get('goal').value, '');
   assert.equal(ui.get('profile-trigger').disabled, true);
+});
+
+test('the 1 + 1 test profile shows the commit form after one minute and ends after the second', () => {
+  const ui = app();
+  assert.equal(ui.get('profile-value').textContent, '25 + 6');
+  ui.choose('1-1');
+  assert.equal(ui.get('profile-value').textContent, '1 + 1');
+  ui.enter('Quick test');
+  ui.event(ui.get('play'), 'click');
+  assert.equal(ui.get('time').textContent, '01:00');
+  ui.advance(59_000);
+  assert.equal(ui.get('break-goals').hidden, true);
+  ui.advance(1_000);
+  assert.equal(ui.get('time').textContent, '01:00');
+  assert.equal(ui.get('break-goal-text').textContent, 'Quick test');
+  assert.equal(ui.get('break-goals').hidden, false);
+  assert.equal(ui.get('commit-form').hidden, false);
+  ui.advance(59_000);
+  assert.equal(ui.get('time').textContent, '00:01');
+  ui.advance(1_000);
+  assert.equal(ui.get('setup').hidden, false);
+  assert.equal(ui.get('break-goals').hidden, true);
 });
 
 test('50 + 11 shows goals during break and returns to the empty start view', () => {

@@ -4,10 +4,15 @@ const CycleTimer = typeof module !== 'undefined'
   : CountdownTimer;
 
 const FOCUS_PROFILES = Object.freeze([
-  [15, 5], [20, 5], [25, 5], [30, 10], [35, 10], [40, 10], [50, 10],
-].map(([focusMinutes, baseBreakMinutes]) => Object.freeze({
-  id: `${focusMinutes}-${baseBreakMinutes}`, focusMinutes, breakMinutes: baseBreakMinutes + 1,
-})));
+  ['1-1', 1, 1],
+  ['15-5', 15, 6],
+  ['20-5', 20, 6],
+  ['25-5', 25, 6],
+  ['30-10', 30, 11],
+  ['35-10', 35, 11],
+  ['40-10', 40, 11],
+  ['50-10', 50, 11],
+].map(([id, focusMinutes, breakMinutes]) => Object.freeze({ id, focusMinutes, breakMinutes })));
 
 class FocusCycle {
   constructor(profileId = '25-5', clock = Date.now) {

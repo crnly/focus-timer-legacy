@@ -15,10 +15,10 @@ for (const profile of FOCUS_PROFILES) {
     assert.equal(cycle.update(), 'break-started');
     assert.equal(cycle.phase, 'break');
     assert.equal(cycle.timer.state, 'running');
-    assert.equal(profile.breakMinutes, Number(profile.id.split('-')[1]) + 1);
-    assert.equal(cycle.timer.remainingMs, profile.breakMinutes * 60_000);
+    const breakMinutes = profile.id === '1-1' ? 1 : Number(profile.id.split('-')[1]) + 1;
+    assert.equal(cycle.timer.remainingMs, breakMinutes * 60_000);
     assert.equal(cycle.breakSerial, 1);
-    advance(profile.breakMinutes * 60_000);
+    advance(breakMinutes * 60_000);
     assert.equal(cycle.update(), 'cycle-ended');
     assert.equal(cycle.phase, 'focus');
     assert.equal(cycle.timer.state, 'ready');
