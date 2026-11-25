@@ -4,7 +4,7 @@
 
 Ein ruhiger Browser-Timer für konzentriertes Arbeiten: Ziele festhalten, Fokus- und Pausendauer wählen und starten. Während der Pause erscheinen die ursprünglichen Ziele wieder. Das Projekt verbindet eine bewusst reduzierte Oberfläche mit praktischer Arbeit an Browser-Technologien und testbarer Timer-Logik.
 
-**[Timer öffnen](https://crnly.github.io/focus-timer/)**
+**[Timer öffnen](https://crnly.github.io/focus-timer-legacy/)**
 
 ## Features
 
