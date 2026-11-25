@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d1117">
   <meta name="description" content="Set your goals, focus, and take a break. A quiet focus timer with pine trees and a simple rhythm.">
   <title>Focus Timer</title>
-  <link rel="stylesheet" href="style.css?v=20261031-1">
+  <link rel="stylesheet" href="style.css?v=20261125-1">
 </head>
 <body>
   <main class="workspace" aria-label="Focus Timer">
@@ -19,16 +19,16 @@
           <label for="goal" class="setup-prompt">Set your goal and choose your focus + break times.</label>
           <div id="profile-choice" class="duration-choice">
             <select id="profile" aria-label="Focus and break duration">
-              <option value="15-5">15 + 5</option>
-              <option value="20-5">20 + 5</option>
-              <option value="25-5" selected>25 + 5</option>
-              <option value="30-10">30 + 10</option>
-              <option value="35-10">35 + 10</option>
-              <option value="40-10">40 + 10</option>
-              <option value="50-10">50 + 10</option>
+              <option value="15-5">15 + 6</option>
+              <option value="20-5">20 + 6</option>
+              <option value="25-5" selected>25 + 6</option>
+              <option value="30-10">30 + 11</option>
+              <option value="35-10">35 + 11</option>
+              <option value="40-10">40 + 11</option>
+              <option value="50-10">50 + 11</option>
             </select>
             <button id="profile-trigger" class="profile-trigger" type="button" aria-label="Focus and break duration" aria-haspopup="listbox" aria-expanded="false" aria-controls="profile-options" hidden>
-              <span id="profile-value">25 + 5</span>
+              <span id="profile-value">25 + 6</span>
               <span class="profile-chevron" aria-hidden="true"></span>
             </button>
             <div id="profile-options" class="profile-options" role="listbox" aria-label="Focus and break duration" hidden></div>
@@ -47,7 +47,15 @@
         <span id="phase-status" class="timer-status" role="status"></span>
       </div>
       <section id="break-goals" class="break-goals" aria-label="Session goals" hidden>
+        <h2>Original goal</h2>
         <p id="break-goal-text" class="break-goal-text"></p>
+        <form id="commit-form" class="commit-form">
+          <label for="commit-message">What did you get done?</label>
+          <textarea id="commit-message" rows="2" maxlength="280" required></textarea>
+          <button id="save-commit" type="submit" disabled>Save commit</button>
+          <p id="commit-error" class="commit-error" role="alert" hidden></p>
+        </form>
+        <p id="commit-saved" class="commit-saved" role="status" tabindex="-1" hidden>Commit saved.</p>
       </section>
       <div id="timer-actions" class="timer-actions">
         <button id="play" class="play-control" type="button" aria-label="Start focus" title="Start focus" disabled>
@@ -57,9 +65,14 @@
         </button>
       </div>
     </section>
+    <aside class="commit-panel" aria-labelledby="commits-heading">
+      <h2 id="commits-heading">Commits</h2>
+      <p id="commits-empty" class="commits-empty">No commits yet.</p>
+      <ul id="commit-list" class="commit-list" role="list"></ul>
+    </aside>
   </main>
   <script src="timer.js?v=20261030-2"></script>
-  <script src="cycle.js?v=20261030-2"></script>
-  <script src="script.js?v=20261031-5"></script>
+  <script src="cycle.js?v=20261125-1"></script>
+  <script src="script.js?v=20261125-1"></script>
 </body>
 </html>

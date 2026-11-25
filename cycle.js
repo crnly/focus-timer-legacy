@@ -5,8 +5,8 @@ const CycleTimer = typeof module !== 'undefined'
 
 const FOCUS_PROFILES = Object.freeze([
   [15, 5], [20, 5], [25, 5], [30, 10], [35, 10], [40, 10], [50, 10],
-].map(([focusMinutes, breakMinutes]) => Object.freeze({
-  id: `${focusMinutes}-${breakMinutes}`, focusMinutes, breakMinutes,
+].map(([focusMinutes, baseBreakMinutes]) => Object.freeze({
+  id: `${focusMinutes}-${baseBreakMinutes}`, focusMinutes, breakMinutes: baseBreakMinutes + 1,
 })));
 
 class FocusCycle {

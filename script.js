@@ -1,4 +1,4 @@
-// One panel: focus -> automatic break -> manual restart.
+// Focus -> automatic break with an optional commit -> manual restart.
 const $ = (id) => document.getElementById(id);
 const cycle = new FocusCycle();
 let sessionGoal = '';
@@ -136,9 +136,18 @@ function scheduleTick() {
 
 function handleTransition(transition) {
   setGoalError();
+  if (transition === 'cycle-ended') {
+    commitForm.reset();
+    saveCommit.disabled = true;
+    commitForm.hidden = false;
+    $('commit-saved').hidden = true;
+    $('commit-error').hidden = true;
+  }
   renderControls();
   playAlarm(transition === 'break-started' ? 'focus' : 'break');
-  if (transition === 'cycle-ended') $('goal').focus({ preventScroll: true });
+  if (transition === 'cycle-ended' && !commitList.contains(document.activeElement)) {
+    $('goal').focus({ preventScroll: true });
+  }
 }
 
 function tick() {
@@ -292,6 +301,92 @@ goalInput.addEventListener('beforeinput', (event) => {
 goalInput.addEventListener('compositionstart', rememberGoal);
 goalInput.addEventListener('compositionend', constrainGoal);
 goalInput.addEventListener('input', constrainGoal);
+
+const commitForm = $('commit-form');
+const commitMessage = $('commit-message');
+const saveCommit = $('save-commit');
+const commitList = $('commit-list');
+const commitPrefix = 'focus-timer-legacy:commit:';
+const commitDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+function loadCommits() {
+  try {
+    const storage = globalThis.localStorage;
+    const commits = [];
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (!key?.startsWith(commitPrefix)) continue;
+      try {
+        const commit = JSON.parse(storage.getItem(key));
+        if (typeof commit?.message === 'string' && typeof commit.goal === 'string'
+          && Number.isFinite(commit.createdAt) && Number.isFinite(new Date(commit.createdAt).getTime())
+          && Number.isInteger(commit.focusMinutes) && commit.focusMinutes > 0) {
+          commits.push(commit);
+        }
+      } catch {
+        // A damaged entry should not hide the rest of the history.
+      }
+    }
+    return commits.sort((a, b) => b.createdAt - a.createdAt);
+  } catch {
+    return [];
+  }
+}
+
+function createCommitItem(commit) {
+  const item = document.createElement('li');
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  const date = document.createElement('time');
+  date.dateTime = new Date(commit.createdAt).toISOString();
+  date.textContent = commitDateFormat.format(commit.createdAt);
+  const message = document.createElement('span');
+  message.className = 'commit-summary-message';
+  message.textContent = commit.message;
+  summary.append(date, message);
+
+  const fields = document.createElement('dl');
+  fields.className = 'commit-details';
+  for (const [label, value] of [['Original goal', commit.goal], ['Focus time', `${commit.focusMinutes} min`]]) {
+    const term = document.createElement('dt');
+    term.textContent = label;
+    const description = document.createElement('dd');
+    description.textContent = value;
+    fields.append(term, description);
+  }
+  details.append(summary, fields);
+  item.append(details);
+  return item;
+}
+
+commitMessage.addEventListener('input', () => {
+  saveCommit.disabled = !commitMessage.value.trim();
+  $('commit-error').hidden = true;
+});
+commitForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const message = commitMessage.value.trim();
+  if (cycle.phase !== 'break' || commitForm.hidden || !message) return;
+  const commit = { message, goal: sessionGoal, focusMinutes: cycle.profile.focusMinutes, createdAt: Date.now() };
+  try {
+    // A separate key per commit keeps simultaneous writes in different tabs independent.
+    const id = globalThis.crypto.getRandomValues(new Uint32Array(4)).join('-');
+    globalThis.localStorage.setItem(commitPrefix + id, JSON.stringify(commit));
+  } catch {
+    $('commit-error').textContent = 'Could not save the commit in this browser. Please try again.';
+    $('commit-error').hidden = false;
+    return;
+  }
+  commitList.prepend(createCommitItem(commit));
+  $('commits-empty').hidden = true;
+  commitForm.hidden = true;
+  $('commit-saved').hidden = false;
+  $('commit-saved').focus({ preventScroll: true });
+});
+
+const savedCommits = loadCommits();
+for (const commit of savedCommits) commitList.append(createCommitItem(commit));
+$('commits-empty').hidden = savedCommits.length > 0;
 
 document.addEventListener('visibilitychange', tick);
 renderControls();

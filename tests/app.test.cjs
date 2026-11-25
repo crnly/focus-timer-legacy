@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 // A small DOM adapter exercises the real UI script and clock together.
 // Layout, native browser input and rendered line wrapping still need browser QA.
-function app({ AudioContext, fetch } = {}) {
+function app({ AudioContext, fetch, storage = new Map() } = {}) {
   let now = 0;
   let pendingTick = null;
   let timerId = 0;
@@ -29,7 +29,8 @@ function app({ AudioContext, fetch } = {}) {
       this.classList = { toggle() {} };
     }
     setAttribute(key, value) { this.attributes[key] = value; }
-    append(child) { this.children.push(child); }
+    append(...children) { this.children.push(...children); }
+    prepend(child) { this.children.unshift(child); }
     contains(target) { return target === this || this.children.some(child => child.contains(target)); }
     focus() { document.activeElement = this; }
     setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
@@ -38,6 +39,7 @@ function app({ AudioContext, fetch } = {}) {
   for (const [, id, attrs] of html.matchAll(/id="([^"]+)"([^>]*)>/g)) {
     const element = new Element();
     element.hidden = /\bhidden\b/.test(attrs);
+    element.disabled = /\bdisabled\b/.test(attrs);
     elements.set(id, element);
   }
   const get = id => {
@@ -47,6 +49,7 @@ function app({ AudioContext, fetch } = {}) {
   document = new EventTarget();
   document.getElementById = get;
   document.createElement = () => new Element();
+  get('commit-form').reset = () => { get('commit-message').value = ''; };
   get('profile-choice').children = [get('profile'), get('profile-trigger'), get('profile-options')];
   const select = get('profile');
   select.options = Array.from(html.matchAll(/<option value="([^"]+)"([^>]*)>([^<]+)<\/option>/g),
@@ -61,7 +64,14 @@ function app({ AudioContext, fetch } = {}) {
     set: value => { clockText = value; clockWrites++; },
   });
   const context = vm.createContext({
-    document, Event, Date: { now: () => now },
+    document, Event, crypto: globalThis.crypto,
+    Date: class extends Date { static now() { return now; } },
+    localStorage: {
+      get length() { return storage.size; },
+      key: (index) => [...storage.keys()][index],
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+    },
     ...(AudioContext ? { AudioContext } : {}),
     ...(fetch ? { fetch } : {}),
     setTimeout(fn, delay) {
@@ -104,9 +114,11 @@ function app({ AudioContext, fetch } = {}) {
 }
 
 test('main entry point references existing local scripts, styles and images', () => {
-  const optionIds = Array.from(html.matchAll(/<option value="([^"]+)"/g), match => match[1]);
-  assert.deepEqual(optionIds, FOCUS_PROFILES.map(profile => profile.id));
-  assert.ok(!optionIds.includes('1-1'));
+  const options = Array.from(html.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g),
+    ([, id, label]) => [id, label]);
+  assert.deepEqual(options, FOCUS_PROFILES.map(({ id, focusMinutes, breakMinutes }) =>
+    [id, `${focusMinutes} + ${breakMinutes}`]));
+  assert.ok(!options.some(([id]) => id === '1-1'));
   const ids = Array.from(html.matchAll(/\bid="([^"]+)"/g), match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
   for (const [, reference] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
@@ -118,7 +130,7 @@ test('main entry point references existing local scripts, styles and images', ()
   for (const [, id] of script.matchAll(/\$\('([^']+)'\)/g)) assert.ok(ids.includes(id), `Missing DOM id: ${id}`);
 });
 
-test('Play requires a goal and starts the selected 40 + 10 profile', () => {
+test('Play requires a goal and starts the selected 40 + 11 profile', () => {
   const ui = app();
   assert.equal(ui.get('play').disabled, true);
   assert.equal(ui.get('time').textContent, '');
@@ -135,7 +147,7 @@ test('Play requires a goal and starts the selected 40 + 10 profile', () => {
   assert.equal(ui.get('profile-trigger').disabled, true);
 });
 
-test('50 + 10 shows goals during break and returns to the empty start view', () => {
+test('50 + 11 shows goals during break and returns to the empty start view', () => {
   const ui = app();
   const goal = 'Complete the draft\nReview <section> markup\nSend the update\nPlan tomorrow';
   ui.choose('50-10');
@@ -144,10 +156,10 @@ test('50 + 10 shows goals during break and returns to the empty start view', () 
   assert.equal(ui.get('break-goals').hidden, true);
   assert.equal(ui.get('break-goal-text').textContent, '');
   ui.advance(50 * 60_000);
-  assert.equal(ui.get('time').textContent, '10:00');
+  assert.equal(ui.get('time').textContent, '11:00');
   assert.equal(ui.get('break-goals').hidden, false);
   assert.equal(ui.get('break-goal-text').textContent, goal);
-  ui.advance(10 * 60_000);
+  ui.advance(11 * 60_000);
   assert.equal(ui.get('break-goals').hidden, true);
   assert.equal(ui.get('break-goal-text').textContent, '');
   assert.equal(ui.get('setup').hidden, false);
@@ -163,6 +175,77 @@ test('50 + 10 shows goals during break and returns to the empty start view', () 
   ui.advance(60 * 60_000);
   assert.equal(ui.get('break-goal-text').textContent, '');
   assert.equal(ui.get('setup').hidden, false);
+});
+
+test('a break commit stores its message, date, original goal and focus length across reloads', () => {
+  const storage = new Map();
+  const ui = app({ storage });
+  const form = ui.get('commit-form');
+  const message = ui.get('commit-message');
+  const button = ui.get('save-commit');
+  function submit(text) {
+    message.value = text;
+    ui.event(message, 'input');
+    ui.event(form, 'submit');
+  }
+
+  assert.equal(ui.get('commits-empty').hidden, false);
+  ui.enter('First goal\nKeep <markup> as text');
+  ui.event(ui.get('play'), 'click');
+  assert.equal(ui.get('break-goals').hidden, true);
+  ui.advance(25 * 60_000);
+  assert.equal(ui.get('break-goals').hidden, false);
+  assert.equal(form.hidden, false);
+  assert.equal(button.disabled, true);
+  submit('   ');
+  assert.equal(storage.size, 0);
+  submit('  Finished the draft  ');
+  assert.equal(storage.size, 1);
+  assert.equal(form.hidden, true);
+  assert.equal(ui.get('commit-saved').hidden, false);
+  assert.equal(ui.get('commits-empty').hidden, true);
+  submit('Duplicate');
+  assert.equal(storage.size, 1);
+
+  ui.advance(6 * 60_000);
+  assert.equal(message.value, '');
+  ui.choose('15-5');
+  ui.enter('Second goal');
+  ui.event(ui.get('play'), 'click');
+  ui.advance(15 * 60_000);
+  submit('Reviewed the draft');
+
+  const reloaded = app({ storage });
+  const entries = reloaded.get('commit-list').children;
+  assert.equal(entries.length, 2);
+  const [[latestSummary, latestFields], [firstSummary, firstFields]] = entries.map(entry => entry.children[0].children);
+  assert.equal(latestSummary.children[1].textContent, 'Reviewed the draft');
+  assert.equal(latestFields.children[3].textContent, '15 min');
+  assert.equal(firstSummary.children[0].dateTime, new Date(25 * 60_000).toISOString());
+  assert.ok(firstSummary.children[0].textContent);
+  assert.equal(firstSummary.children[1].textContent, 'Finished the draft');
+  assert.equal(firstFields.children[1].textContent, 'First goal\nKeep <markup> as text');
+  assert.equal(firstFields.children[3].textContent, '25 min');
+});
+
+test('a failed commit write keeps the note available for retry during the break', () => {
+  const storage = new Map();
+  const write = storage.set.bind(storage);
+  storage.set = () => { throw new Error('Storage unavailable'); };
+  const ui = app({ storage });
+  ui.enter('Finish the draft');
+  ui.event(ui.get('play'), 'click');
+  ui.advance(25 * 60_000);
+  ui.get('commit-message').value = 'Draft finished';
+  ui.event(ui.get('commit-form'), 'submit');
+  assert.equal(ui.get('commit-error').hidden, false);
+  assert.equal(ui.get('commit-form').hidden, false);
+  assert.equal(ui.get('commit-message').value, 'Draft finished');
+  assert.equal(ui.get('commit-list').children.length, 0);
+  storage.set = write;
+  ui.event(ui.get('commit-form'), 'submit');
+  assert.equal(ui.get('commit-saved').hidden, false);
+  assert.equal(storage.size, 1);
 });
 
 test('profile picker supports arrow keys, Home, End and Escape without changing selection', () => {
@@ -224,7 +307,7 @@ test('one beep sounds at each phase end and repeated updates do not repeat it', 
   assert.equal(beeps, 1);
   ui.advance(1_000);
   assert.equal(beeps, 1);
-  ui.advance(5 * 60_000);
+  ui.advance(6 * 60_000);
   assert.equal(beeps, 2);
   ui.advance(1_000);
   assert.equal(beeps, 2);
@@ -242,8 +325,8 @@ test('a rejected audio unlock does not interrupt the timer or produce an unhandl
   await Promise.resolve();
   assert.equal(ui.get('time').textContent, '25:00');
   ui.advance(25 * 60_000);
-  assert.equal(ui.get('time').textContent, '05:00');
-  ui.advance(5 * 60_000);
+  assert.equal(ui.get('time').textContent, '06:00');
+  ui.advance(6 * 60_000);
   assert.equal(ui.get('setup').hidden, false);
   assert.equal(ui.get('play').disabled, true);
 });
@@ -296,7 +379,7 @@ test('each phase plays its own completion sound once and both files are cached',
   assert.equal(audio.calls.samples, 1);
   ui.advance(1_000);
   assert.equal(audio.calls.samples, 1);
-  ui.advance(5 * 60_000);
+  ui.advance(6 * 60_000);
   assert.equal(audio.calls.samples, 2);
   assert.deepEqual(audio.calls.durations, [9.5, 2.6]);
   assert.deepEqual(audio.calls.sources, [1, 2]);
@@ -316,7 +399,7 @@ test('a failed sound download keeps the original beep and the full timer cycle w
   await new Promise(setImmediate);
   ui.advance(25 * 60_000);
   assert.equal(audio.calls.beeps, 1);
-  ui.advance(5 * 60_000);
+  ui.advance(6 * 60_000);
   assert.equal(audio.calls.beeps, 2);
   assert.equal(audio.calls.samples, 0);
   assert.equal(ui.get('setup').hidden, false);
@@ -336,7 +419,7 @@ test('a missing break sound falls back to the beep without replaying the focus s
   await new Promise(setImmediate);
   ui.advance(25 * 60_000);
   assert.deepEqual(audio.calls.sources, [1]);
-  ui.advance(5 * 60_000);
+  ui.advance(6 * 60_000);
   assert.deepEqual(audio.calls.sources, [1]);
   assert.equal(audio.calls.beeps, 1);
   assert.equal(ui.get('setup').hidden, false);
@@ -360,7 +443,7 @@ test('the idle app schedules no polling and a running timer updates at second bo
   assert.equal(ui.get('time').textContent, '24:59');
   assert.equal(ui.clockWrites(), startWrites + 1);
   assert.equal(ui.nextTickIn(), 1000);
-  ui.advance(30 * 60_000 - 1000);
+  ui.advance(31 * 60_000 - 1000);
   assert.equal(ui.get('setup').hidden, false);
   assert.equal(ui.nextTickIn(), null);
 });
@@ -377,9 +460,9 @@ test('visibility updates preserve the clock display and align the next callback 
   ui.advance(750);
   assert.equal(ui.get('time').textContent, '24:59');
   ui.advance(25 * 60_000 - 1000);
-  assert.equal(ui.get('time').textContent, '05:00');
+  assert.equal(ui.get('time').textContent, '06:00');
   assert.equal(ui.nextTickIn(), 1000);
-  ui.advance(5 * 60_000);
+  ui.advance(6 * 60_000);
   assert.equal(ui.nextTickIn(), null);
   assert.equal(ui.get('setup').hidden, false);
 });

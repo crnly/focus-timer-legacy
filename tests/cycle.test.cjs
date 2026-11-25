@@ -15,6 +15,7 @@ for (const profile of FOCUS_PROFILES) {
     assert.equal(cycle.update(), 'break-started');
     assert.equal(cycle.phase, 'break');
     assert.equal(cycle.timer.state, 'running');
+    assert.equal(profile.breakMinutes, Number(profile.id.split('-')[1]) + 1);
     assert.equal(cycle.timer.remainingMs, profile.breakMinutes * 60_000);
     assert.equal(cycle.breakSerial, 1);
     advance(profile.breakMinutes * 60_000);
@@ -33,7 +34,7 @@ test('delayed updates account for break time already elapsed', () => {
   const { cycle, advance } = setup();
   cycle.start(); advance(25 * 60_000 + 12_345);
   assert.equal(cycle.update(), 'break-started');
-  assert.equal(cycle.timer.remainingMs, 5 * 60_000 - 12_345);
+  assert.equal(cycle.timer.remainingMs, 6 * 60_000 - 12_345);
 });
 
 test('a long interruption never starts another focus session automatically', () => {
@@ -74,7 +75,7 @@ test('display updates preserve the current break identifier', () => {
   cycle.start(); advance(25 * 60_000); cycle.update();
   for (let i = 0; i < 10; i++) { advance(200); cycle.update(); }
   assert.equal(cycle.breakSerial, 1);
-  assert.equal(cycle.timer.remainingMs, 5 * 60_000 - 2000);
+  assert.equal(cycle.timer.remainingMs, 6 * 60_000 - 2000);
 });
 
 test('only a new manually started cycle produces the next break', () => {
@@ -92,7 +93,7 @@ test('profiles are locked during focus and break and become available afterward'
   cycle.start(); assert.equal(cycle.setProfile('50-10'), false);
   advance(25 * 60_000); cycle.update();
   assert.equal(cycle.setProfile('50-10'), false);
-  advance(5 * 60_000); cycle.update();
+  advance(6 * 60_000); cycle.update();
   assert.equal(cycle.setProfile('50-10'), true);
   assert.equal(cycle.timer.remainingMs, 50 * 60_000);
   assert.throws(() => cycle.setProfile('99-1'), RangeError);

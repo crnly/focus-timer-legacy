@@ -9,11 +9,12 @@ Ein ruhiger Browser-Timer für konzentriertes Arbeiten: Ziele festhalten, Fokus-
 ## Features
 
 - Ziele in bis zu vier sichtbaren Textzeilen eingeben und per Play starten.
-- Fokus und Pause kombinieren: 15 + 5, 20 + 5, 25 + 5, 30 + 10, 35 + 10, 40 + 10 oder 50 + 10 Minuten.
+- Fokus und Pause kombinieren: 15 + 6, 20 + 6, 25 + 6, 30 + 11, 35 + 11, 40 + 11 oder 50 + 11 Minuten.
 - Während der Fokuszeit nur den Countdown sehen; die Pause startet automatisch.
-- In der Pause die gesetzten Ziele wiedersehen; unterschiedliche Klänge markieren beide Phasenenden.
+- In der Pause das ursprüngliche Ziel wiedersehen und einen kurzen Commit speichern. Unterschiedliche Klänge markieren die beiden Phasenenden.
+- In der Commit-Liste Datum und Nachricht sehen. Beim Aufklappen erscheinen das ursprüngliche Ziel und die Fokusdauer.
 - Nach der Pause mit leerer Zieleingabe zurückkehren und die nächste Sitzung selbst starten.
-- Ohne Konto arbeiten: Ziele bleiben nur im offenen Tab. Neuladen oder Schließen beendet die Sitzung.
+- Ohne Konto arbeiten. Gespeicherte Commits bleiben im selben Browser erhalten. Neuladen oder Schließen beendet die laufende Sitzung.
 
 <details>
 <summary><strong>Tech Stack</strong></summary>
