@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 // A small DOM adapter exercises the real UI script and clock together.
 // Layout, native browser input and rendered line wrapping still need browser QA.
-function app({ AudioContext, fetch, storage = new Map() } = {}) {
+function app({ Audio, AudioContext, fetch, location, storage = new Map() } = {}) {
   let now = 0;
   let pendingTick = null;
   let timerId = 0;
@@ -73,7 +73,9 @@ function app({ AudioContext, fetch, storage = new Map() } = {}) {
       setItem: (key, value) => storage.set(key, value),
     },
     ...(AudioContext ? { AudioContext } : {}),
+    ...(Audio ? { Audio } : {}),
     ...(fetch ? { fetch } : {}),
+    ...(location ? { location } : {}),
     setTimeout(fn, delay) {
       pendingTick = { fn, at: now + delay, id: ++timerId };
       return timerId;
@@ -198,7 +200,7 @@ test('50 + 11 shows goals during break and returns to the empty start view', () 
   assert.equal(ui.get('setup').hidden, false);
 });
 
-test('a break commit stores its message, date, original goal and focus length across reloads', () => {
+test('a break commit stores its message, date, original goal and both durations across reloads', () => {
   const storage = new Map();
   const ui = app({ storage });
   const form = ui.get('commit-form');
@@ -222,6 +224,7 @@ test('a break commit stores its message, date, original goal and focus length ac
   assert.equal(storage.size, 0);
   submit('  Finished the draft  ');
   assert.equal(storage.size, 1);
+  assert.equal(JSON.parse([...storage.values()][0]).breakMinutes, 6);
   assert.equal(form.hidden, true);
   assert.equal(ui.get('commit-saved').hidden, false);
   assert.equal(ui.get('commits-empty').hidden, true);
@@ -240,13 +243,26 @@ test('a break commit stores its message, date, original goal and focus length ac
   const entries = reloaded.get('commit-list').children;
   assert.equal(entries.length, 2);
   const [[latestSummary, latestFields], [firstSummary, firstFields]] = entries.map(entry => entry.children[0].children);
-  assert.equal(latestSummary.children[1].textContent, 'Reviewed the draft');
+  assert.equal(latestSummary.children[1].textContent, '15 + 6 min');
+  assert.equal(latestSummary.children[2].textContent, 'Reviewed the draft');
   assert.equal(latestFields.children[3].textContent, '15 min');
-  assert.equal(firstSummary.children[0].dateTime, new Date(25 * 60_000).toISOString());
-  assert.ok(firstSummary.children[0].textContent);
-  assert.equal(firstSummary.children[1].textContent, 'Finished the draft');
+  const createdAt = new Date(25 * 60_000);
+  assert.equal(firstSummary.children[0].dateTime, createdAt.toISOString());
+  assert.equal(firstSummary.children[0].textContent, new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(createdAt));
+  assert.equal(firstSummary.children[1].textContent, '25 + 6 min');
+  assert.equal(firstSummary.children[2].textContent, 'Finished the draft');
   assert.equal(firstFields.children[1].textContent, 'First goal\nKeep <markup> as text');
   assert.equal(firstFields.children[3].textContent, '25 min');
+  assert.equal(firstFields.children[5].textContent, '6 min');
+});
+
+test('a commit saved before break durations were stored displays its original profile', () => {
+  const record = { message: 'Old entry', goal: 'Finish the draft', focusMinutes: 50, createdAt: 0 };
+  const storage = new Map([['focus-timer-legacy:commit:old', JSON.stringify(record)]]);
+  const ui = app({ storage });
+  const [summary, fields] = ui.get('commit-list').children[0].children[0].children;
+  assert.equal(summary.children[1].textContent, '50 + 11 min');
+  assert.equal(fields.children[5].textContent, '11 min');
 });
 
 test('a failed commit write keeps the note available for retry during the break', () => {
@@ -410,6 +426,31 @@ test('each phase plays its own completion sound once and both files are cached',
   await new Promise(setImmediate);
   assert.equal(requests, 2);
   assert.equal(audio.calls.decodes, 2);
+});
+
+test('a locally opened timer plays the two MP3s directly without fetching them', () => {
+  const audio = sampleAudio();
+  const played = [];
+  let requests = 0;
+  const ui = app({
+    AudioContext: audio.AudioContext,
+    Audio: class {
+      constructor(url) { this.url = url; }
+      play() { played.push(this.url); return Promise.resolve(); }
+    },
+    fetch() { requests++; return Promise.reject(new Error('File fetch blocked')); },
+    location: { protocol: 'file:' },
+  });
+  ui.choose('1-1');
+  ui.enter('Test the local timer');
+  ui.event(ui.get('play'), 'click');
+  assert.deepEqual(played, []);
+  ui.advance(60_000);
+  assert.deepEqual(played, ['assets/focus-end.mp3']);
+  ui.advance(60_000);
+  assert.deepEqual(played, ['assets/focus-end.mp3', 'assets/break-end.mp3']);
+  assert.equal(requests, 0);
+  assert.equal(audio.calls.beeps, 0);
 });
 
 test('a failed sound download keeps the original beep and the full timer cycle working', async () => {

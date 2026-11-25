@@ -230,7 +230,8 @@ select { padding: 8px 10px; font: 11px/1.8 var(--mono); }
 .commit-list summary { padding: 9px 11px; border-radius: 7px; cursor: pointer; }
 .commit-list summary:hover { background: #17232e; }
 .commit-list summary:focus-visible { outline-offset: -2px; }
-.commit-list time { font: 12px/1.5 var(--mono); color: var(--muted); }
+.commit-list time, .commit-summary-profile { font: 12px/1.5 var(--mono); color: var(--muted); }
+.commit-summary-profile { margin-inline-start: .75em; white-space: nowrap; }
 .commit-summary-message {
   display: block;
   margin-top: 3px;

@@ -12,13 +12,13 @@ const alarms = {
 
 function enableAlarm() {
   try {
-    const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!Audio) return;
-    if (!alarmContext || alarmContext.state === 'closed') alarmContext = new Audio();
+    const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!Context) return;
+    if (!alarmContext || alarmContext.state === 'closed') alarmContext = new Context();
     // Unlock audio during the user's Play click, without delaying the timer.
     alarmContext.resume().catch(() => {});
     // Focus completion sound: https://www.youtube.com/watch?v=u7Djn-G6uSk
-    if (!globalThis.fetch) return;
+    if (globalThis.location?.protocol === 'file:' || !globalThis.fetch) return;
     for (const alarm of Object.values(alarms)) {
       if (alarm.loading) continue;
       alarm.loading = fetch(alarm.url)
@@ -36,10 +36,9 @@ function enableAlarm() {
 }
 
 function playAlarm(phase) {
-  if (!alarmContext || alarmContext.state !== 'running') return;
-  try {
-    const alarm = alarms[phase];
-    if (alarm.buffer) {
+  const alarm = alarms[phase];
+  if (alarm.buffer && alarmContext?.state === 'running') {
+    try {
       const sound = alarmContext.createBufferSource();
       const volume = alarmContext.createGain();
       sound.buffer = alarm.buffer;
@@ -49,8 +48,29 @@ function playAlarm(phase) {
       sound.onended = () => { sound.disconnect(); volume.disconnect(); };
       sound.start(alarmContext.currentTime, 0, alarm.duration);
       return;
+    } catch {
+      // Try direct media playback if Web Audio fails.
     }
-    // Keep the simple beep if the file could not be loaded or decoded.
+  }
+
+  // Media elements can play local files even when fetch cannot load them.
+  if (globalThis.Audio) {
+    try {
+      alarm.player ??= new globalThis.Audio(alarm.url);
+      alarm.player.volume = 0.5;
+      alarm.player.currentTime = 0;
+      alarm.player.play().catch(playBeep);
+      return;
+    } catch {
+      // Keep the beep if neither MP3 playback method is available.
+    }
+  }
+  playBeep();
+}
+
+function playBeep() {
+  if (!alarmContext || alarmContext.state !== 'running') return;
+  try {
     const tone = alarmContext.createOscillator();
     const volume = alarmContext.createGain();
     const now = alarmContext.currentTime;
@@ -307,7 +327,7 @@ const commitMessage = $('commit-message');
 const saveCommit = $('save-commit');
 const commitList = $('commit-list');
 const commitPrefix = 'focus-timer-legacy:commit:';
-const commitDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const commitDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 
 function loadCommits() {
   try {
@@ -334,20 +354,30 @@ function loadCommits() {
 }
 
 function createCommitItem(commit) {
+  const { focusMinutes } = commit;
+  // Earlier commits stored only the focus duration, which identified their profile.
+  const breakMinutes = Number.isInteger(commit.breakMinutes) && commit.breakMinutes > 0
+    ? commit.breakMinutes
+    : FOCUS_PROFILES.find((entry) => entry.focusMinutes === focusMinutes)?.breakMinutes;
   const item = document.createElement('li');
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   const date = document.createElement('time');
   date.dateTime = new Date(commit.createdAt).toISOString();
   date.textContent = commitDateFormat.format(commit.createdAt);
+  const profile = document.createElement('span');
+  profile.className = 'commit-summary-profile';
+  profile.textContent = breakMinutes ? `${focusMinutes} + ${breakMinutes} min` : `${focusMinutes} min focus`;
   const message = document.createElement('span');
   message.className = 'commit-summary-message';
   message.textContent = commit.message;
-  summary.append(date, message);
+  summary.append(date, profile, message);
 
   const fields = document.createElement('dl');
   fields.className = 'commit-details';
-  for (const [label, value] of [['Original goal', commit.goal], ['Focus time', `${commit.focusMinutes} min`]]) {
+  const values = [['Original goal', commit.goal], ['Focus time', `${focusMinutes} min`]];
+  if (breakMinutes) values.push(['Break time', `${breakMinutes} min`]);
+  for (const [label, value] of values) {
     const term = document.createElement('dt');
     term.textContent = label;
     const description = document.createElement('dd');
@@ -367,7 +397,8 @@ commitForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const message = commitMessage.value.trim();
   if (cycle.phase !== 'break' || commitForm.hidden || !message) return;
-  const commit = { message, goal: sessionGoal, focusMinutes: cycle.profile.focusMinutes, createdAt: Date.now() };
+  const { focusMinutes, breakMinutes } = cycle.profile;
+  const commit = { message, goal: sessionGoal, focusMinutes, breakMinutes, createdAt: Date.now() };
   try {
     // A separate key per commit keeps simultaneous writes in different tabs independent.
     const id = globalThis.crypto.getRandomValues(new Uint32Array(4)).join('-');
